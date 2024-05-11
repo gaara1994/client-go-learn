@@ -298,13 +298,21 @@ drwxrwxr-x 3 yantao yantao 4.0K 5月  10 11:13 storagemigration
 
 #### 1.Pods
 
-创建 监听 删除 demo3/main.go
+创建 监听 删除  demo3/main.go
 
 ```
 Pod资源在Kubernetes中被认为是基本上不可变的，这意味着一旦Pod被创建，你不应该直接修改其定义，包括更换镜像。Pod的设计原则是围绕着它的 immutability（不变性）和 declarative configuration（声明式配置）理念构建的。当需要改变Pod的属性，比如镜像版本，推荐的做法是通过操作更高层次的抽象资源来间接实现，比如：
 Deployments: 用于无状态应用，支持滚动更新、回滚等特性。
 StatefulSets: 针对有状态应用，同样支持更新策略，同时保持Pod的唯一标识和稳定的存储。
 ```
+
+
+
+#### 2.Services
+
+创建 更新 删除
+
+
 
 
 

@@ -6,12 +6,12 @@ import (
 	"fmt"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/homedir"
 	"log"
 	"path/filepath"
-	"time"
 )
 
 func main() {
@@ -42,91 +42,54 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	podName := "client-test-alpine-1"
+	serviceName := "my-service"
 	nameSpace := "client-test"
-	//定义一个 Kubernetes Pod 对象的实例
-	pod := &corev1.Pod{
+	//定义一个 Kubernetes service 对象的实例
+	service := &corev1.Service{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      podName,
-			Namespace: "client-test",
-			Labels:    nil,
+			Name:    serviceName,
+			Namespace: nameSpace,
+			Labels: map[string]string{
+				"app": "my-app",
+			},
 		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
+		Spec: corev1.ServiceSpec{
+			Type: corev1.ServiceTypeClusterIP,
+			Ports: []corev1.ServicePort{
 				{
-					Name:    "alpine-sleep",
-					Image:   "alpine",
-					Command: []string{"/bin/sh", "-c", "echo start-sleep && sleep 100"},
+					Port:       80,
+					TargetPort: intstr.FromInt(9376),
+					Protocol:   corev1.ProtocolTCP,
 				},
+			},
+			Selector: map[string]string{
+				"app": "my-app",
 			},
 		},
 	}
-	//1.创建Pods
-	podInfo, err := clientset.CoreV1().Pods("client-test").Create(context.TODO(), pod, metav1.CreateOptions{})
+	//1.创建service
+	serv, err := clientset.CoreV1().Services(nameSpace).Create(context.TODO(), service, metav1.CreateOptions{})
 	if err != nil {
 		log.Fatal("Create err ",err)
 	}
-	fmt.Println("添加成功")
-	fmt.Println(podInfo.Namespace)
-	fmt.Println(podInfo.Name)
+	fmt.Println("Services 添加成功")
+	fmt.Println(serv.Namespace)
+	fmt.Println(serv.Name)
 
-
-	//2.监听Pod
-	watch, err := clientset.CoreV1().Pods("client-test").Watch(context.TODO(), metav1.ListOptions{Watch: true})
+	//2.获取 Services
+	old,err := clientset.CoreV1().Services(nameSpace).Get(context.TODO(),serviceName,metav1.GetOptions{})
 	if err != nil {
-		log.Fatal("Watch err ",err)
+		log.Fatal("Get err ",err)
 	}
-	deletedChan := make(chan bool,0)
-	defer watch.Stop()
-	go func() {
-		for event := range watch.ResultChan() {
-			fmt.Println("pod changed==========================================================================")
-			fmt.Println("event.Type===", event.Type)
-			switch event.Type {
-			//case "MODIFIED":
-			//	fmt.Println("有更新")
-			case "DELETED":
-				fmt.Println("删除成功")
-				deletedChan<- true
-			}
-		}
-	}()
+	fmt.Println("old",old.Name)
 
-	//3.获取当前Pod实例
-	time.Sleep(60 * time.Second)
-	oldPod, err := clientset.CoreV1().Pods(nameSpace).Get(context.TODO(), podName, metav1.GetOptions{})
+
+	//2.更新 Services
+	old.Name = "new-service"
+	updateServ, err := clientset.CoreV1().Services(nameSpace).Update(context.TODO(), serv, metav1.UpdateOptions{})
 	if err != nil {
-		return
+		log.Fatal("Update err ",err)
 	}
-	fmt.Println("当前注解：", oldPod.ObjectMeta.Annotations)
+	fmt.Println("新的updateServ：",updateServ.Name)
 
-	// 更新Pod的注解，例如添加一个新的注解或者修改已存在的注解
-	if oldPod.ObjectMeta.Annotations == nil {
-		oldPod.ObjectMeta.Annotations = make(map[string]string)
-	}
-	oldPod.ObjectMeta.Annotations["update-example"] = "This pod was updated at " + time.Now().Format(time.RFC3339)
-
-	//3.更新pod
-	/*
-	Pod资源在Kubernetes中被认为是基本上不可变的，这意味着一旦Pod被创建，你不应该直接修改其定义，包括更换镜像。Pod的设计原则是围绕着它的 immutability（不变性）和 declarative configuration（声明式配置）理念构建的。当需要改变Pod的属性，比如镜像版本，推荐的做法是通过操作更高层次的抽象资源来间接实现，比如：
-	Deployments: 用于无状态应用，支持滚动更新、回滚等特性。
-	StatefulSets: 针对有状态应用，同样支持更新策略，同时保持Pod的唯一标识和稳定的存储。
-	*/
-	updatedPod, err := clientset.CoreV1().Pods(nameSpace).Update(context.TODO(),oldPod,metav1.UpdateOptions{})
-	if err != nil {
-		log.Fatalf("Failed to update Pod %q: %v", podName, err)
-	}
-	fmt.Println("新的注解：", updatedPod.ObjectMeta.Annotations)
-
-
-	//4.删除pod
-	time.Sleep(100 * time.Second)
-	err = clientset.CoreV1().Pods(nameSpace).Delete(context.TODO(), podName, metav1.DeleteOptions{})
-	if err != nil {
-		log.Fatal("Delete err ",err)
-	}
-	fmt.Println("删除中")
-
-	res := <-deletedChan
-	fmt.Println("删除结果：",res)
 }
