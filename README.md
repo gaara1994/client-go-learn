@@ -48,20 +48,24 @@
     }
     ```
 
-## 学习资源
-
-- **官方文档**：查阅Kubernetes官方网站上的client-go文档，是最权威的学习资源。
-- **GitHub示例**：client-go的GitHub仓库中有许多示例代码，位于`examples/`目录下，可以作为学习和参考的起点。
-- **在线教程和视频**：如B站和知乎上的教程视频，这些通常提供更直观的操作演示和解释。
-- **源码分析文章**：深入阅读一些技术社区的文章，特别是关于源码分析的内容，能帮助你更深入理解其内部机制。
-
-记住，随着Kubernetes和client-go版本的更新，具体的API和用法可能会有所变化，因此始终参考最新的官方文档是明智的选择。
 
 
+# 1.ClientSet
 
-# 1.创建客户端
+`ClientSet`是一个结构体，它封装了一系列的客户端对象，每个客户端对象对应Kubernetes API的一个特定资源或一组资源。比如，你可以通过`ClientSet.CoreV1().Pods(namespace).List(...)`来列出指定命名空间中的所有Pod，或者使用`ClientSet.AppsV1().Deployments(namespace).Create(...)`来创建一个新的Deployment。
 
-## 1.k8s集群外
+## 1. 功能与使用
+
+- **资源操作**：提供了创建、读取、更新和删除（CRUD）Kubernetes资源的方法，涵盖了Pods、Services、Deployments、ConfigMaps等各种资源类型。
+- **命名空间操作**：支持跨命名空间的操作，允许你针对特定命名空间执行API调用。
+- **发现与列举**：可以用来发现API服务器上的资源类型，并列举资源实例。
+- **配置与认证**：`ClientSet`的创建通常需要一个配置对象（`rest.Config`），该配置包含了访问API服务器所需的认证信息、服务器地址、TLS设置等。
+
+## 2. 创建`ClientSet`
+
+通常，你会使用`kubernetes.NewForConfig()`函数来从一个`rest.Config`实例创建一个`ClientSet`。下面是一个简单的示例：
+
+### 1.k8s集群外
 
 参考 `client-go/examples/out-of-cluster-client-configuration/main.go`
 
@@ -124,7 +128,7 @@ func main() {
 
 
 
-## 2.k8s集群内
+### 2.k8s集群内
 
 参考 `client-go/examples/in-cluster-client-configuration/main.go`
 
@@ -166,4 +170,143 @@ func main() {
 ```
 
 
+
+# 2.不同资源的管理
+
+`ClientSet`包含了针对不同组的客户端。在Kubernetes的Go客户端(`client-go`)中，`ClientSet`是一个综合性的结构，它整合了多个API组的客户端接口。API组是用来对Kubernetes API中的资源进行分类和版本管理的一种方式，支持扩展性和版本控制。
+
+创建一个`ClientSet`时，它会为多个核心及扩展组预初始化客户端，让你能够与诸如以下资源进行互动：
+
+- 核心组 (`core/v1`)：Pod、服务、配置映射、密钥、节点等。
+- 应用组 (`apps/v1`)：部署、有状态集、守护进程集、副本集、任务、定时任务等。
+- 批处理组 (`batch/v1`, `batch/v1beta1`)：任务、定时任务等。
+- 网络组 (`networking.k8s.io/v1`)：入口、网络策略等。
+- 以及其他更多，依据Kubernetes版本和可用的扩展而定。
+
+每个组的客户端都提供了特定于该组资源的方法，让你能够执行创建、读取、更新、删除等操作以及其他与那些资源相关的活动。
+
+简化的来说，`ClientSet`内部结构是这样的组织，展示它如何聚合不同组的客户端：
+
+```go
+type ClientSet struct {
+    coreV1                        *corev1.CoreV1Client
+    appsV1                        *appsv1.AppsV1Client
+    batchV1                       *batchv1.BatchV1Client
+    // ... 其他组的接口
+}
+```
+
+你可以通过如`ClientSet.CoreV1()`、`ClientSet.AppsV1()`等方法访问这些接口，进而与相应的Kubernetes资源进行互动。
+
+例如，若要创建一个部署，你会使用`AppsV1Interface`：
+
+```go
+deploymentClient := clientset.AppsV1().Deployments(namespace)
+deployment, err := deploymentClient.Create(context.TODO(), deploymentSpec, metav1.CreateOptions{})
+```
+
+这种`ClientSet`的模块化设计确保了你的代码能够轻松地与广泛的Kubernetes资源互动，同时保持清晰和结构化的API调用方式。
+
+
+
+k8s有不同类型的资源，不同类型的资源要调用client-go不同子包的方法，下面是子包的列表。
+
+```shell
+➜  typed git:(master) ✗ pwd
+/home/yantao/go/src/github.com/gaara1994/client-go/kubernetes/typed
+➜  typed git:(master) ✗ ll 
+总用量 88K
+drwxrwxr-x 5 yantao yantao 4.0K 5月  10 11:13 admissionregistration
+drwxrwxr-x 3 yantao yantao 4.0K 5月  10 11:13 apiserverinternal
+drwxrwxr-x 5 yantao yantao 4.0K 5月  10 11:13 apps
+drwxrwxr-x 5 yantao yantao 4.0K 5月  10 11:13 authentication
+drwxrwxr-x 4 yantao yantao 4.0K 5月  10 11:13 authorization
+drwxrwxr-x 6 yantao yantao 4.0K 5月  10 11:13 autoscaling
+drwxrwxr-x 4 yantao yantao 4.0K 5月  10 11:13 batch
+drwxrwxr-x 5 yantao yantao 4.0K 5月  10 11:13 certificates
+drwxrwxr-x 4 yantao yantao 4.0K 5月  10 11:13 coordination
+drwxrwxr-x 3 yantao yantao 4.0K 5月  10 11:13 core
+drwxrwxr-x 4 yantao yantao 4.0K 5月  10 11:13 discovery
+drwxrwxr-x 4 yantao yantao 4.0K 5月  10 11:13 events
+drwxrwxr-x 3 yantao yantao 4.0K 5月  10 11:13 extensions
+drwxrwxr-x 6 yantao yantao 4.0K 5月  10 11:13 flowcontrol
+drwxrwxr-x 5 yantao yantao 4.0K 5月  10 11:13 networking
+drwxrwxr-x 5 yantao yantao 4.0K 5月  10 11:13 node
+drwxrwxr-x 4 yantao yantao 4.0K 5月  10 11:13 policy
+drwxrwxr-x 5 yantao yantao 4.0K 5月  10 11:13 rbac
+drwxrwxr-x 3 yantao yantao 4.0K 5月  10 11:13 resource
+drwxrwxr-x 5 yantao yantao 4.0K 5月  10 11:13 scheduling
+drwxrwxr-x 5 yantao yantao 4.0K 5月  10 11:13 storage
+drwxrwxr-x 3 yantao yantao 4.0K 5月  10 11:13 storagemigration
+
+```
+
+1. **核心资源(Core Resources)**: 调用 `clientset.CoreV1()`
+   - Pods
+   - Services
+   - ConfigMaps
+   - Secrets
+   - PersistentVolumes 和 PersistentVolumeClaims
+   - Nodes
+   - Namespaces
+2. **Apps 资源(Apps Resources)**: 调用 `clientset.AppsV1()`
+   - Deployments
+   - ReplicaSets
+   - StatefulSets
+   - DaemonSets
+   - Jobs
+   - CronJobs
+3. **网络资源(Networking Resources)**: 调用 `clientset.NetworkingV1()`
+   - Ingresses
+   - NetworkPolicies
+4. **存储资源(Storage Resources)**: 调用 `clientset.StorageV1()`
+   - StorageClasses
+5. **扩展资源(Extensions/CustomResources)**: 调用 `clientset.ExtensionsV1beta1()`
+   - CustomResourceDefinitions (CRDs) —— 虽然直接通过标准`ClientSet`创建CRDs比较复杂，通常需要使用`apiextensions.k8s.io/v1` API组的客户端，但可以通过扩展`ClientSet`或使用`DynamicClient`来操作。
+   - 各种自定义资源对象（由CRDs定义）
+6. **安全与认证资源(Security and Authentication)**: 调用 `clientset.AuthorizationV1()`
+   - Roles 和 ClusterRoles
+   - RoleBindings 和 ClusterRoleBindings
+   - ServiceAccounts
+7. **API 资源(API Resources)**: 调用 `clientset.OpenAPIV3()`
+   - APIServices
+   - CustomResourceDefinitions
+8. **其他资源**: 
+   - Events	调用 `clientset.EventsV1()`
+   - Endpoints   
+   - HorizontalPodAutoscalers
+   - PodDisruptionBudgets
+   - LimitRanges
+   - ResourceQuotas  ResourceV1alpha2
+
+下面是整理的列表
+
+| 资源类型                             | Clientset类型                 | 具体的资源                                                   |
+| ------------------------------------ | :---------------------------- | ------------------------------------------------------------ |
+| 核心资源(Core Resources)             | clientset.CoreV1()            | Pods  Services  ConfigMaps  Secrets  PersistentVolumes PersistentVolumeClaims  Nodes  Namespaces |
+| Apps 资源(Apps Resources)            | clientset.AppsV1()            | Deployments  ReplicaSets  StatefulSets  DaemonSets  Jobs  CronJobs |
+| 网络资源(Networking Resources)       | clientset.NetworkingV1()      | Ingresses  NetworkPolicies                                   |
+| 存储资源(Storage Resources)          | clientset.StorageV1()         | StorageClasses                                               |
+| 扩展资源(Extensions/CustomResources) | clientset.ExtensionsV1beta1() | CustomResourceDefinitions (CRDs)                             |
+| RBAC资源                             | clientset.RbacV1()            | Roles                                                        |
+| 认证与授权策略                       | clientset.AuthenticationV1()  |                                                              |
+| API 资源(API Resources)              | clientset.OpenAPIV3()         | APIServices CustomResourceDefinitions                        |
+
+
+
+### 1.核心资源(Core Resources)
+
+#### 1.Pods
+
+创建 监听 删除 demo3/main.go
+
+```
+Pod资源在Kubernetes中被认为是基本上不可变的，这意味着一旦Pod被创建，你不应该直接修改其定义，包括更换镜像。Pod的设计原则是围绕着它的 immutability（不变性）和 declarative configuration（声明式配置）理念构建的。当需要改变Pod的属性，比如镜像版本，推荐的做法是通过操作更高层次的抽象资源来间接实现，比如：
+Deployments: 用于无状态应用，支持滚动更新、回滚等特性。
+StatefulSets: 针对有状态应用，同样支持更新策略，同时保持Pod的唯一标识和稳定的存储。
+```
+
+
+
+#### 
 
