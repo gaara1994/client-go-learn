@@ -312,9 +312,43 @@ StatefulSets: 针对有状态应用，同样支持更新策略，同时保持Pod
 
 创建 更新 删除
 
+demo4/main.go
 
 
 
 
-#### 
+
+
+
+
+
+
+
+
+
+
+
+
+
+其他
+
+获取节点资源使用情况
+
+demo5
+
+这部分代码主要用于获取Kubernetes集群中所有节点的基本信息列表，并打印每个节点的名称以及是否处于内存压力状态（MemoryPressure）。这里的内存压力状态是一个布尔型指示器，告诉用户节点是否正面临内存资源分配的压力。但是，它不能提供关于节点实际内存使用量的详细信息。
+
+
+
+
+
+demo6
+
+这一部分则专注于获取节点的实时资源使用度量数据，特别是CPU和内存的使用情况。它通过创建一个专用于与metrics API交互的clientset (`metricsClient`)，并利用这个clientset来请求`NodeMetricses`资源列表。这提供了每个节点的CPU和内存的实际使用量（Usage.Cpu() 和 Usage.Memory()），
+
+
+
+
+
+
 
